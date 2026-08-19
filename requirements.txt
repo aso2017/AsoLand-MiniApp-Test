@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+pymupdf
+python-docx
+Pillow
+python-telegram-bot
+yt-dlp[default]
+gallery-dl
+qrcode[pil]
+jdatetime
+beautifulsoup4
+sympy
+matplotlib
+pypdf
+curl_cffi
