@@ -1,0 +1,20 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1020"><meta name="mobile-web-app-capable" content="yes"><title>AsoLand</title><script src="https://telegram.org/js/telegram-web-app.js"></script><link rel="preload" href="logo.svg" as="image"><link rel="stylesheet" href="styles.css?v=50"></head><body><div id="splash" class="splash"><div class="splash-orb"></div><img src="logo.svg" class="splash-logo" alt="AsoLand"><div class="splash-name">AsoLand</div><div class="splash-loader"><span></span><span></span><span></span></div></div><div id="app">
+<header class="top"><div class="brand-wrap"><div class="brand-mark"><img src="logo.svg" alt="AsoLand"></div><div><div class="brand">AsoLand</div><div class="sub" id="welcome"></div></div></div><div class="top-actions"><div id="miniUser" class="mini-user" hidden></div><button id="themeToggle" class="icon theme-toggle" type="button" aria-label="تغییر تم">☀️</button><button id="lang" class="icon">کوردی</button></div></header>
+<main><section class="hero"><div class="hero-icon"><img src="logo.svg" alt="AsoLand"></div><div><h1 id="hello"></h1><p id="choose"></p></div></section><button class="hero-ai" id="heroAi" type="button"><span>✦</span><div><b id="heroAiTitle"></b><small id="heroAiHint"></small></div><strong>→</strong></button>
+<section class="dashboard-strip" id="dashboardStrip">
+  <div class="dashboard-greeting"><span id="dashIcon">✨</span><div><b id="dashTitle"></b><small id="dashSubtitle"></small></div></div>
+  <div class="dash-stats">
+    <div><strong id="dashCoins">—</strong><small id="dashCoinsLabel"></small></div>
+    <div><strong id="dashLevel">—</strong><small id="dashLevelLabel"></small></div>
+    <div><strong id="dashStreak">—</strong><small id="dashStreakLabel"></small></div>
+  </div>
+  <div class="dash-actions"><button id="dailyBtn" type="button">🎁 <span></span></button><button id="proBtn" type="button">💎 <span></span></button></div>
+</section>
+<section class="smart-home" id="smartHome">
+  <div class="smart-card"><span>🕘</span><div><b id="continueTitle"></b><small id="continueText"></small></div><button id="continueBtn" type="button">→</button></div>
+  <div class="smart-card"><span>🔥</span><div><b id="popularTitle"></b><small id="popularText"></small></div><button id="popularBtn" type="button">→</button></div>
+</section>
+<section class="grid" id="tools"></section>
+<section class="panel" id="chatPanel"></section><section class="panel" id="filePanel"></section><section class="panel" id="toolPanel"></section><section class="panel" id="profilePanel"></section>
+</main><div id="toast" class="toast"></div>
+<nav class="nav"><button class="active" data-tab="home">⌂<span id="navHome"></span></button><button data-tab="ai">✦<span id="navAi"></span></button><button data-tab="tools">▦<span id="navTools"></span></button><button data-tab="profile">◉<span id="navProfile"></span></button></nav></div><script src="app.js?v=50" defer></script></body></html>
