@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: asoland-miniapp-test
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: KURDISH_STT_KEY
+        sync: false
+      - key: AUDD_API_KEY
+        sync: false
+      - key: MINI_APP_URL
+        sync: false
+      - key: MINI_APP_MENU_TEXT
+        value: "AsoLand 🚀"
