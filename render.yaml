@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: asoland-miniapp-test
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: KURDISH_STT_KEY
+        sync: false
+      - key: AUDD_API_KEY
+        sync: false
+      - key: MINI_APP_URL
+        sync: false
+      - key: MINI_APP_MENU_TEXT
+        value: "AsoLand 🚀"
+
+      # Optional: comma-separated fallback clients, e.g. android_vr,web_safari,android
+      - key: YT_DLP_YOUTUBE_PLAYER_CLIENT
+        sync: false
+      - key: YT_DLP_YOUTUBE_PO_TOKEN
+        sync: false
