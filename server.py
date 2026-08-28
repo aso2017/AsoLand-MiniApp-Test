@@ -1,7 +1,7 @@
-import os, sys, hashlib, hmac, time, base64, secrets, asyncio, shutil, sqlite3, json
+import os, sys, hashlib, hmac, time, base64, secrets, asyncio, shutil, sqlite3, json, re
 from urllib.parse import parse_qsl
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from telegram import Bot as TelegramBot
@@ -12,6 +12,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import asoland_bot as bot
 
 app = FastAPI(title="AsoLand Telegram Mini App API")
+
+
+async def configure_telegram_menu_button():
+    """Keep the bot chat menu configured as a real Telegram Web App button."""
+    token = os.getenv("BOT_TOKEN", "").strip()
+    app_url = os.getenv("MINI_APP_URL", "").strip().rstrip("/")
+    if not token or not app_url:
+        return
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"https://api.telegram.org/bot{token}/setChatMenuButton",
+                json={"menu_button": {"type": "web_app", "text": os.getenv("MINI_APP_MENU_TEXT", "AsoLand 🚀"), "web_app": {"url": app_url}}},
+            )
+            response.raise_for_status()
+            result = response.json()
+            if not result.get("ok"):
+                raise RuntimeError(str(result))
+    except Exception as exc:
+        # Menu configuration must never prevent the API from starting.
+        print(f"Telegram menu button setup skipped: {exc}")
+
+
+@app.on_event("startup")
+async def startup_tasks():
+    await configure_telegram_menu_button()
 UPLOAD_ROOT = ROOT / "uploads"
 UPLOAD_ROOT.mkdir(exist_ok=True)
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -45,7 +72,7 @@ def db():
     return conn
 
 def telegram_user(init_data: str):
-    if not init_data or not validate_init_data(init_data):
+    if _telegram_auth_state(init_data) != "ok":
         return None
     data = dict(parse_qsl(init_data, keep_blank_values=True))
     try:
@@ -107,22 +134,54 @@ class AccountIn(BaseModel):
     initData: str = ""
     language: str = "fa"
 
-def validate_init_data(init_data: str) -> bool:
-    token = os.getenv("BOT_TOKEN", "")
-    if not token or not init_data:
-        return False
-    data = dict(parse_qsl(init_data, keep_blank_values=True))
-    received = data.pop("hash", None)
-    if not received:
-        return False
-    check = "\n".join(f"{k}={data[k]}" for k in sorted(data))
-    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
-    calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+def _telegram_auth_state(init_data: str) -> str:
+    """Return a precise, safe reason for Telegram Mini App auth state."""
+    token = os.getenv("BOT_TOKEN", "").strip()
+    raw = (init_data or "").strip()
+    if not raw:
+        return "missing"
+    if not token:
+        return "server_not_configured"
     try:
+        data = dict(parse_qsl(raw, keep_blank_values=True))
+        received = data.pop("hash", None)
+        if not received or len(received) != 64:
+            return "invalid_hash"
+        check = "\n".join(f"{k}={data[k]}" for k in sorted(data))
+        secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+        calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, received):
+            return "invalid_signature"
         auth_date = int(data.get("auth_date", "0") or 0)
-    except ValueError:
-        return False
-    return hmac.compare_digest(calc, received) and time.time() - auth_date < 86400
+        now = int(time.time())
+        if auth_date <= 0 or auth_date > now + 300:
+            return "invalid_auth_date"
+        if now - auth_date > 86400:
+            return "expired"
+        user_raw = data.get("user", "")
+        if not user_raw:
+            return "missing_user"
+        user = json.loads(user_raw)
+        if not user.get("id"):
+            return "missing_user"
+        return "ok"
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return "malformed"
+    except Exception:
+        return "invalid"
+
+
+def validate_init_data(init_data: str) -> bool:
+    return _telegram_auth_state(init_data) == "ok"
+
+
+def extract_init_data(request: Request, explicit: str = "") -> str:
+    """Accept the signed Telegram payload from body/query/header for client compatibility."""
+    candidates = (explicit, request.headers.get("X-Telegram-Init-Data", ""), request.query_params.get("initData", ""))
+    for value in candidates:
+        if (value or "").strip():
+            return value.strip()
+    return ""
 
 
 def safe_image_ext(name: str) -> str:
@@ -141,30 +200,55 @@ async def cleanup_sessions():
 
 
 @app.get("/api/account")
-async def account(initData: str = ""):
-    u=ensure_user(initData)
+async def account(request: Request, initData: str = ""):
+    signed = extract_init_data(request, initData)
+    state = _telegram_auth_state(signed)
+    if state != "ok":
+        return {"authenticated":False,"authState":state,"coins":0,"xp":0,"level":1,"streak":0,"claimed":False,"isPro":False,"referralCode":""}
+    u = ensure_user(signed)
     if not u:
-        return {"authenticated":False,"coins":0,"xp":0,"level":1,"streak":0,"claimed":False,"isPro":False,"referralCode":""}
+        return {"authenticated":False,"authState":"invalid_user","coins":0,"xp":0,"level":1,"streak":0,"claimed":False,"isPro":False,"referralCode":""}
     level=max(1,int(u["xp"])//100+1)
-    return {"authenticated":True,"userId":u["user_id"],"firstName":u["first_name"],"username":u["username"],
+    return {"authenticated":True,"authState":"ok","userId":u["user_id"],"firstName":u["first_name"],"username":u["username"],
             "coins":int(u["coins"]),"xp":int(u["xp"]),"level":level,"streak":int(u["streak"]),
             "claimed":u["last_reward"]==time.strftime("%Y-%m-%d"),"isPro":bool(u["is_pro"]),
             "referralCode":u["referral_code"]}
 
 @app.post("/api/rewards/daily")
-async def daily_reward(payload: AccountIn):
-    u=ensure_user(payload.initData)
-    if not u: raise HTTPException(401,"برای دریافت جایزه، Mini App را از داخل Telegram باز کن")
+async def daily_reward(request: Request, payload: AccountIn):
+    signed = extract_init_data(request, payload.initData)
+    state = _telegram_auth_state(signed)
+    if state != "ok":
+        message = {
+            "missing": "اطلاعات Telegram دریافت نشد. Mini App را از منوی ربات باز کن.",
+            "expired": "نشست Telegram منقضی شده است. Mini App را ببند و دوباره باز کن.",
+            "invalid_signature": "اعتبارسنجی Telegram ناموفق بود. دکمهٔ Mini App ربات را دوباره باز کن.",
+            "server_not_configured": "BOT_TOKEN روی سرور تنظیم نشده است.",
+        }.get(state, "اطلاعات Telegram معتبر نیست")
+        raise HTTPException(401, message)
+    u=ensure_user(signed)
+    if not u: raise HTTPException(401,"کاربر Telegram قابل شناسایی نیست")
     today=time.strftime("%Y-%m-%d")
-    conn=db(); row=conn.execute("SELECT * FROM users WHERE user_id=?", (u["user_id"],)).fetchone()
-    if row["last_reward"]==today:
+    conn=db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row=conn.execute("SELECT * FROM users WHERE user_id=?", (u["user_id"],)).fetchone()
+        if row["last_reward"]==today:
+            return {"claimed":False,"reward":0,"coins":row["coins"],"xp":row["xp"],"level":row["xp"]//100+1,"streak":row["streak"],"isPro":bool(row["is_pro"])}
+        last=row["last_reward"] or ""
+        yesterday=(time.localtime(time.time()-86400))
+        yesterday_text=time.strftime("%Y-%m-%d", yesterday)
+        streak=int(row["streak"])+1 if last==yesterday_text else 1
+        reward=20; coins=int(row["coins"])+reward; xp=int(row["xp"])+25
+        conn.execute("UPDATE users SET coins=?,xp=?,streak=?,last_reward=?,updated_at=? WHERE user_id=?",
+                     (coins,xp,streak,today,time.time(),u["user_id"]))
+        conn.commit()
+        return {"claimed":True,"reward":reward,"coins":coins,"xp":xp,"level":xp//100+1,"streak":streak,"isPro":bool(row["is_pro"])}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
         conn.close()
-        return {"claimed":False,"reward":0,"coins":row["coins"],"xp":row["xp"],"level":row["xp"]//100+1,"streak":row["streak"],"isPro":bool(row["is_pro"])}
-    reward=20; streak=int(row["streak"])+1; coins=int(row["coins"])+reward; xp=int(row["xp"])+25
-    conn.execute("UPDATE users SET coins=?,xp=?,streak=?,last_reward=?,updated_at=? WHERE user_id=?",
-                 (coins,xp,streak,today,time.time(),u["user_id"]))
-    conn.commit(); conn.close()
-    return {"claimed":True,"reward":reward,"coins":coins,"xp":xp,"level":xp//100+1,"streak":streak,"isPro":bool(row["is_pro"])}
 
 @app.get("/api/health")
 async def health():
@@ -215,7 +299,11 @@ async def health():
     return {
         "ok": True,
         "service": "AsoLand Mini App",
-        "version": "5.4-multi-backend",
+        "version": "5.5-auth-weather",
+        "telegram": {
+            "bot_token_configured": bool(os.getenv("BOT_TOKEN", "").strip()),
+            "mini_app_url_configured": bool(os.getenv("MINI_APP_URL", "").strip()),
+        },
         "downloader": {
             "yt_dlp": ytdlp_version,
             "gallery_dl": gallery_dl_version,
@@ -367,12 +455,22 @@ _CITY_ALIASES = {
 
 async def _geocode_city(client, city: str, language: str):
     async def _search(name: str, lang: str):
-        r = await client.get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": name, "count": 5, "language": lang, "format": "json"},
-        )
-        r.raise_for_status()
-        return (r.json() or {}).get("results") or []
+        last_error = None
+        for attempt in range(3):
+            try:
+                r = await client.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": name, "count": 5, "language": lang, "format": "json"},
+                )
+                r.raise_for_status()
+                return (r.json() or {}).get("results") or []
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(0.25 * (attempt + 1))
+        if last_error:
+            raise last_error
+        return []
 
     lang_param = {"fa": "fa", "ckb": "en", "en": "en"}.get(language, "fa")
 
@@ -412,26 +510,38 @@ async def _geocode_city(client, city: str, language: str):
 
 @app.post("/api/weather")
 async def weather(payload: WeatherIn):
-    city = payload.city.strip()
+    city = re.sub(r"\s+", " ", payload.city.replace("\u200c", " ").strip())
     if len(city) < 2:
         raise HTTPException(400, "نام شهر را وارد کن")
+    language = payload.language if payload.language in {"fa", "ckb", "en"} else "fa"
     try:
-        # Direct Open-Meteo call keeps Mini App weather independent from Bot handlers.
-        async with bot.httpx.AsyncClient(timeout=15.0) as client:
-            place, err = await _geocode_city(client, city, payload.language)
+        # Keep Mini App weather independent from Telegram bot handlers.
+        import httpx
+        timeout = httpx.Timeout(18.0, connect=8.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, trust_env=True) as client:
+            place, err = await _geocode_city(client, city, language)
             if err:
                 raise HTTPException(404, err)
             lat, lon = place["latitude"], place["longitude"]
-            forecast = await client.get(
-                "https://api.open-meteo.com/v1/forecast",
-                params={
-                    "latitude": lat, "longitude": lon,
-                    "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,cloud_cover",
-                    "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
-                    "forecast_days": 3, "timezone": "auto", "wind_speed_unit": "kmh",
-                },
-            )
-            forecast.raise_for_status()
+            forecast_params={
+                "latitude": lat, "longitude": lon,
+                "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,cloud_cover",
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
+                "forecast_days": 3, "timezone": "auto", "wind_speed_unit": "kmh",
+            }
+            forecast = None
+            last_error = None
+            for attempt in range(3):
+                try:
+                    forecast = await client.get("https://api.open-meteo.com/v1/forecast", params=forecast_params)
+                    forecast.raise_for_status()
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < 2:
+                        await asyncio.sleep(0.25 * (attempt + 1))
+            if forecast is None or last_error and forecast is not None and forecast.is_error:
+                raise last_error or RuntimeError("weather provider unavailable")
             data = forecast.json() or {}
             cur, daily = data.get("current", {}), data.get("daily", {})
             codes_by_lang = {
@@ -439,7 +549,7 @@ async def weather(payload: WeatherIn):
                 "ckb": {0:"ئاسمانی ڕوون",1:"بە زۆری ڕوون",2:"نیوە هەور",3:"هەور",45:"تەم",48:"تەمی سارد",51:"بارانی سووک",53:"باران",55:"بارانی توند",61:"بارانی سووک",63:"باران",65:"بارانی توند",71:"بەفرێکی سووک",73:"بەفر",75:"بەفری توند",80:"بارانی پڕۆژەیی سووک",81:"بارانی پڕۆژەیی",82:"بارانی پڕۆژەیی توند",95:"گەڕماوی",96:"گەڕماوی لەگەڵ تۆفان",99:"گەڕماوی و تگرگ"},
                 "en": {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Freezing fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Light showers",81:"Showers",82:"Heavy showers",95:"Thunderstorm",96:"Thunderstorm with hail",99:"Heavy thunderstorm with hail"}
             }
-            codes = codes_by_lang.get(payload.language, codes_by_lang["fa"])
+            codes = codes_by_lang.get(language, codes_by_lang["fa"])
             def v(k, default="—"):
                 x=cur.get(k); return default if x is None else x
             mx=(daily.get("temperature_2m_max") or [None])[0]
@@ -447,8 +557,8 @@ async def weather(payload: WeatherIn):
             rp=(daily.get("precipitation_probability_max") or [None])[0]
             name=place.get("name") or city
             country=place.get("country") or ""
-            Lw={"fa":("آب‌وهوای","دما","احساس واقعی","وضعیت","رطوبت","باد","پوشش ابر","بارش فعلی","احتمال بارش امروز","کمینه/بیشینه امروز","وضعیت نامشخص"),"ckb":("کەش و هەوای","پلەی گەرمی","هەستی گەرمی","دۆخ","شێداری","با","داپۆشینی هەور","بارینی ئێستا","ڕێژەی باران بۆ ئەمڕۆ","کەمترین/زۆرترین ئەمڕۆ","دۆخی نەزانراو"),"en":("Weather in","Temperature","Feels like","Condition","Humidity","Wind","Cloud cover","Current precipitation","Today rain probability","Today low/high","Unknown")}.get(payload.language,("Weather in","Temperature","Feels like","Condition","Humidity","Wind","Cloud cover","Current precipitation","Today rain probability","Today low/high","Unknown"))
-            text=(f"🌤 <b>{Lw[0]} {name}</b>" + (f"، {country}" if country and payload.language!='en' else (f", {country}" if country else "")) + "\n\n"
+            Lw={"fa":("آب‌وهوای","دما","احساس واقعی","وضعیت","رطوبت","باد","پوشش ابر","بارش فعلی","احتمال بارش امروز","کمینه/بیشینه امروز","وضعیت نامشخص"),"ckb":("کەش و هەوای","پلەی گەرمی","هەستی گەرمی","دۆخ","شێداری","با","داپۆشینی هەور","بارینی ئێستا","ڕێژەی باران بۆ ئەمڕۆ","کەمترین/زۆرترین ئەمڕۆ","دۆخی نەزانراو"),"en":("Weather in","Temperature","Feels like","Condition","Humidity","Wind","Cloud cover","Current precipitation","Today rain probability","Today low/high","Unknown")}.get(language,("Weather in","Temperature","Feels like","Condition","Humidity","Wind","Cloud cover","Current precipitation","Today rain probability","Today low/high","Unknown"))
+            text=(f"🌤 <b>{Lw[0]} {name}</b>" + (f"، {country}" if country and language!='en' else (f", {country}" if country else "")) + "\n\n"
                   f"🌡 {Lw[1]}: <b>{v('temperature_2m')}°C</b>\n"
                   f"🤗 {Lw[2]}: <b>{v('apparent_temperature')}°C</b>\n"
                   f"☁️ {Lw[3]}: <b>{codes.get(cur.get('weather_code'),Lw[10])}</b>\n"
@@ -459,7 +569,7 @@ async def weather(payload: WeatherIn):
                   f"☔ {Lw[8]}: <b>{rp if rp is not None else '—'}%</b>\n"
                   f"📈 {Lw[9]}: <b>{mn if mn is not None else '—'}° / {mx if mx is not None else '—'}°</b>\n\n"
                   "📡 منبع: Open-Meteo")
-            return {"ok": True, "text": text, "city": name, "country": country}
+            return {"ok": True, "text": text, "city": name, "country": country, "source": "Open-Meteo"}
     except HTTPException:
         raise
     except Exception as e:
@@ -976,36 +1086,50 @@ async def config(payload: ConfigIn):
 
 
 @app.post("/api/alerts")
-async def create_alert(payload: AlertIn):
+async def create_alert(request: Request, payload: AlertIn):
+    signed=extract_init_data(request, payload.user_id)
+    u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای ساخت هشدار، Mini App را از داخل Telegram باز کن")
     if payload.direction not in {"above","below"}: raise HTTPException(400,"جهت هشدار نامعتبر است")
-    key=_user_key(payload.user_id); item={"symbol":payload.symbol.lower().strip(),"target":payload.target,"direction":payload.direction,"created":time.time()}
+    key=u["user_id"]; item={"symbol":payload.symbol.lower().strip(),"target":payload.target,"direction":payload.direction,"created":time.time()}
+    if not item["symbol"]: raise HTTPException(400,"نماد را وارد کن")
     user_alerts.setdefault(key,[]).append(item)
     return {"ok":True,"alerts":user_alerts[key]}
 
 @app.get("/api/alerts")
-async def list_alerts(user_id: str = ""):
-    return {"alerts":user_alerts.get(_user_key(user_id),[])}
+async def list_alerts(request: Request, user_id: str = ""):
+    signed=extract_init_data(request, user_id); u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای مشاهده هشدارها، Mini App را از داخل Telegram باز کن")
+    return {"alerts":user_alerts.get(u["user_id"],[])}
 
 @app.delete("/api/alerts")
-async def delete_alert(user_id: str = "", index: int = 0):
-    arr=user_alerts.get(_user_key(user_id),[])
+async def delete_alert(request: Request, user_id: str = "", index: int = 0):
+    signed=extract_init_data(request, user_id); u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای حذف هشدار، Mini App را از داخل Telegram باز کن")
+    arr=user_alerts.get(u["user_id"],[])
     if 0 <= index < len(arr): arr.pop(index)
     return {"alerts":arr}
 
 @app.post("/api/reminders")
-async def create_reminder(payload: ReminderIn):
-    key=_user_key(payload.user_id); item={"text":payload.text.strip(),"due":payload.due,"created":time.time()}
+async def create_reminder(request: Request, payload: ReminderIn):
+    signed=extract_init_data(request, payload.user_id); u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای ساخت یادآوری، Mini App را از داخل Telegram باز کن")
+    key=u["user_id"]; item={"text":payload.text.strip(),"due":payload.due,"created":time.time()}
     if not item["text"]: raise HTTPException(400,"متن یادآوری خالی است")
     user_reminders.setdefault(key,[]).append(item)
     return {"reminders":user_reminders[key]}
 
 @app.get("/api/reminders")
-async def list_reminders(user_id: str = ""):
-    return {"reminders":user_reminders.get(_user_key(user_id),[])}
+async def list_reminders(request: Request, user_id: str = ""):
+    signed=extract_init_data(request, user_id); u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای مشاهده یادآوری‌ها، Mini App را از داخل Telegram باز کن")
+    return {"reminders":user_reminders.get(u["user_id"],[])}
 
 @app.delete("/api/reminders")
-async def delete_reminder(user_id: str = "", index: int = 0):
-    arr=user_reminders.get(_user_key(user_id),[])
+async def delete_reminder(request: Request, user_id: str = "", index: int = 0):
+    signed=extract_init_data(request, user_id); u=ensure_user(signed)
+    if not u: raise HTTPException(401,"برای حذف یادآوری، Mini App را از داخل Telegram باز کن")
+    arr=user_reminders.get(u["user_id"],[])
     if 0 <= index < len(arr): arr.pop(index)
     return {"reminders":arr}
 

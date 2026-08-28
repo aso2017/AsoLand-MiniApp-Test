@@ -9,7 +9,8 @@ Object.assign(T.ckb,{language:'زمان',searchTools:'گەڕان لە ئامرا
 Object.assign(T.fa,{visits:'بازدید',toolsSubtitle:'همه ابزارهای AsoLand، مرتب و آماده استفاده',quickSubtitle:'دسترسی فوری به ابزارهای محبوب',catAll:'همه',catAI:'هوشمند',catCreate:'ساخت و تبدیل',catText:'متن و صدا',catInfo:'اطلاعات',favorite:'علاقه‌مندی',recent:'آخرین استفاده‌ها',voice:'ویس به متن',sticker:'ساخت استیکر',download:'دانلود'});Object.assign(T.ckb,{visits:'سەردان',toolsSubtitle:'هەموو ئامرازەکانی AsoLand، ڕێکخراو و ئامادەن',quickSubtitle:'دەستگەیشتنی خێرا بە ئامرازە بەکارهاتووەکان',catAll:'هەموو',catAI:'زیرەک',catCreate:'دروستکردن و گۆڕین',catText:'دەق و دەنگ',catInfo:'زانیاری',favorite:'دڵخواز',recent:'دوایین بەکارهێنان',voice:'دەنگ بۆ دەق',sticker:'دروستکردنی ستیکەر',download:'داگرتن'});Object.assign(T.fa,{heroAiTitle:'دستیار AsoLand',heroAiHint:'هر چیزی می‌خواهی بگو، راهش را پیدا می‌کنیم'});Object.assign(T.ckb,{heroAiTitle:'یاریدەدەری AsoLand',heroAiHint:'هەر شتێکت دەوێت بڵێ، ڕێگاکەی دەدۆزینەوە'});Object.assign(T.en,{visits:'Visits',heroAiTitle:'AsoLand Assistant',heroAiHint:'Tell me what you need and I’ll find the best tool',toolsSubtitle:'Everything you need, organized and ready',quickSubtitle:'Instant access to popular tools',catAll:'All',catAI:'AI',catCreate:'Create & Convert',catText:'Text & Voice',catInfo:'Insights',favorite:'Favorite',recent:'Recent',voice:'Voice to Text',sticker:'Create Sticker',download:'Download'});Object.assign(T.fa,{dashTitle:'حساب AsoLand',dashSubtitle:'امتیازها و جایزه‌های امروزت',dashCoins:'سکه',dashLevel:'سطح',dashStreak:'استریک',claimReward:'دریافت جایزه',rewardClaimed:'جایزه امروز دریافت شد',proSoon:'AsoLand Pro به‌زودی',continueTitle:'آخرین استفاده',continueEmpty:'هنوز ابزاری استفاده نکردی',popularTitle:'پیشنهاد امروز',popularText:'یک ابزار را امتحان کن'});Object.assign(T.ckb,{dashTitle:'هەژماری AsoLand',dashSubtitle:'خاڵ و دیارییەکانی ئەمڕۆت',dashCoins:'درۆ',dashLevel:'ئاست',dashStreak:'بەردەوامی',claimReward:'وەرگرتنی دیاری',rewardClaimed:'دیاریی ئەمڕۆ وەرگیرا',proSoon:'AsoLand Pro بەم زووانە',continueTitle:'دوایین بەکارهێنان',continueEmpty:'هێشتا هیچ ئامرازێکت بەکارنەهێناوە',popularTitle:'پێشنیاری ئەمڕۆ',popularText:'ئامرازێک تاقی بکەرەوە'});Object.assign(T.en,{dashTitle:'AsoLand Account',dashSubtitle:'Your points and daily rewards',dashCoins:'Coins',dashLevel:'Level',dashStreak:'Streak',claimReward:'Claim reward',rewardClaimed:'Today’s reward claimed',proSoon:'AsoLand Pro coming soon',continueTitle:'Last used',continueEmpty:'You haven’t used a tool yet',popularTitle:'Today’s pick',popularText:'Try one of our tools'});const t=k=>T[lang]?.[k]??T.fa[k]??k;const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function richText(s){let x=esc(s);x=x.replace(/&lt;b&gt;/gi,'<b>').replace(/&lt;\/b&gt;/gi,'</b>').replace(/&lt;br\s*\/??&gt;/gi,'<br>');return x.replace(/\n/g,'<br>')}
-function currentUser(){return tg?.initDataUnsafe?.user||null}
+function telegramWebApp(){return window.Telegram?.WebApp||tg||null}
+function currentUser(){return telegramWebApp()?.initDataUnsafe?.user||null}
 
 // Telegram can occasionally populate initDataUnsafe a moment after the WebApp
 // is initialized. Never hide the mini profile in that case; keep a safe fallback
@@ -32,10 +33,11 @@ function renderMiniUser(){
 // Wait briefly for Telegram's signed initData. Some Telegram WebViews populate it
 // after the first JavaScript tick; without this retry the app could falsely show
 // an unauthenticated account and reject the daily reward.
-async function getInitDataWithRetry(maxTries=20,delay=250){
-  try{tg?.ready?.();tg?.expand?.()}catch(_){}
+async function getInitDataWithRetry(maxTries=24,delay=250){
+  const webApp=telegramWebApp();
+  try{webApp?.ready?.();webApp?.expand?.()}catch(_){}
   for(let i=0;i<maxTries;i++){
-    const value=tg?.initData||'';
+    const value=(webApp?.initData||window.Telegram?.WebApp?.initData||'').trim();
     if(value)return value;
     // Some Android/desktop Telegram clients only populate initData once the
     // WebView tab actually becomes visible/focused, not on first paint.
@@ -67,7 +69,16 @@ const AUTH_MSG={
   ckb:{'no-bridge':'پەیوەندی لەگەڵ تەلەگرام دروست نەبوو. لە ناو ئەپی تەلەگرامەوە بیکەرەوە، نەک بڕاوزەر.','no-signed-data':'ئەم پەڕەیە بە ڕێگای ڕاست نەکراوەتەوە. لە دوگمەی مینیوی بۆتەکە لە تەلەگرام AsoLand بکەرەوە.'},
   en:{'no-bridge':'Could not connect to Telegram. Please open this inside the Telegram app, not a browser.','no-signed-data':'This page wasn\u2019t opened the right way. Open AsoLand from the bot\u2019s menu button in Telegram.'}
 };
-function authFailureMessage(){return AUTH_MSG[lang]?.[authFailureReason()]||t('notAuth')}
+function authFailureMessage(){
+  const state=accountState.authState;
+  const map={
+    missing: AUTH_MSG[lang]?.['no-signed-data'],
+    expired: lang==='fa'?'نشست Telegram منقضی شده؛ Mini App را دوباره باز کن.':lang==='ckb'?'دانیشتنەوەی Telegram بەسەرچووە؛ Mini App دووبارە بکەرەوە.':'Your Telegram session expired; reopen the Mini App.',
+    invalid_signature: lang==='fa'?'اعتبارسنجی Telegram ناموفق بود؛ Mini App را از منوی ربات دوباره باز کن.':lang==='ckb'?'پشتڕاستکردنەوەی Telegram سەرکەوتوو نەبوو؛ Mini App لە مینیوی بۆتەکە دووبارە بکەرەوە.':'Telegram validation failed; reopen the Mini App from the bot menu.',
+    server_not_configured: lang==='fa'?'تنظیمات Telegram روی سرور کامل نیست.':lang==='ckb'?'ڕێکخستنەکانی Telegram لەسەر سێرڤەر تەواو نییە.':'Telegram server configuration is incomplete.'
+  };
+  return map[state]||AUTH_MSG[lang]?.[authFailureReason()]||t('notAuth');
+}
 
 function refreshMiniUser(){
   renderMiniUser();
@@ -79,19 +90,28 @@ function refreshMiniUser(){
 }
 
 function toast(s){const x=document.querySelector('#toast');x.textContent=s;x.style.display='block';clearTimeout(toast.tm);toast.tm=setTimeout(()=>x.style.display='none',2800)}
-async function api(path,opt={}){const r=await fetch(API+path,opt);let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.detail||d.message||t('error'));return d}
+async function api(path,opt={}){
+  const webApp=telegramWebApp();
+  const initData=(webApp?.initData||'').trim();
+  const options={...opt,headers:{...(opt.headers||{})}};
+  if(initData) options.headers['X-Telegram-Init-Data']=initData;
+  const r=await fetch(API+path,options);
+  let d={};try{d=await r.json()}catch{}
+  if(!r.ok){const err=new Error(d.detail||d.message||t('error'));err.status=r.status;err.authState=d.authState;throw err;}
+  return d;
+}
 function panel(id){
   ['chatPanel','filePanel','toolPanel','profilePanel'].forEach(x=>{
     const el=document.getElementById(x);
     if(el) el.style.display=x===id?'block':'none';
   });
-  tg?.BackButton?.show();
+  telegramWebApp()?.BackButton?.show();
   requestAnimationFrame(()=>{
     const el=document.getElementById(id);
     if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
   });
 }
-function home(){['chatPanel','filePanel','toolPanel','profilePanel'].forEach(x=>document.getElementById(x).style.display='none');tg?.BackButton?.hide();document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab==='home'));}
+function home(){['chatPanel','filePanel','toolPanel','profilePanel'].forEach(x=>document.getElementById(x).style.display='none');telegramWebApp()?.BackButton?.hide();document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab==='home'));}
 function applyLang(){document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';document.body.dataset.lang=lang;welcome.textContent=t('welcome');hello.textContent=t('hello');choose.textContent=t('choose');navHome.textContent=t('home');navAi.textContent=t('ai');navTools.textContent=t('tools');navProfile.textContent=t('profile');document.getElementById('heroAiTitle')&&(document.getElementById('heroAiTitle').textContent=t('heroAiTitle'));document.getElementById('heroAiHint')&&(document.getElementById('heroAiHint').textContent=t('heroAiHint'));langBtnText();renderDashboard();renderTools()}
 function langBtnText(){const b=document.getElementById('lang');if(!b)return;b.textContent=lang==='fa'?'کوردی':(lang==='ckb'?'English':'فارسی');b.title=lang==='fa'?'Change language':lang==='ckb'?'گۆڕینی زمان':'تغییر زبان'}
 const tools=[['🤖','aiChat','aiHint'],['📚','file','file'],['👨‍🏫','teacher','teacher'],['🖼️','vision','vision'],['💰','prices','prices'],['🌤️','weather','weather'],['📝','text','text'],['⚙️','more','more']];
@@ -104,19 +124,33 @@ const favKey='asoland_favorites_v1',recentKey='asoland_recent_v1';
 let favorites=JSON.parse(localStorage.getItem(favKey)||'[]');
 let recent=JSON.parse(localStorage.getItem(recentKey)||'[]');
 let accountState={authenticated:false,coins:0,xp:0,level:1,streak:0,isPro:false,referralCode:''};
-try{accountState={...accountState,...JSON.parse(localStorage.getItem('asoland_account_cache_v1')||'{}')}}catch(_){ }
+try{
+  const cached=JSON.parse(localStorage.getItem('asoland_account_cache_v1')||'null');
+  const liveId=String(currentUser()?.id||'');
+  if(cached?.userId && liveId && String(cached.userId)===liveId) accountState={...accountState,...cached};
+}
+catch(_){ localStorage.removeItem('asoland_account_cache_v1'); }
 function saveLists(){localStorage.setItem(favKey,JSON.stringify(favorites));localStorage.setItem(recentKey,JSON.stringify(recent));}
 async function syncAccount(){
-  const initData=await getInitDataWithRetry(20,250);
-  if(!initData){renderDashboard();return accountState;}
+  const initData=await getInitDataWithRetry(24,250);
+  if(!initData){
+    accountState={authenticated:false,coins:0,xp:0,level:1,streak:0,isPro:false,referralCode:'',authState:'missing'};
+    localStorage.removeItem('asoland_account_cache_v1');
+    renderDashboard();
+    return accountState;
+  }
   try{
     const d=await api('/api/account?initData='+encodeURIComponent(initData));
-    if(d&&d.authenticated){
+    if(d?.authenticated){
       accountState={...accountState,...d,authenticated:true};
       localStorage.setItem('asoland_account_cache_v1',JSON.stringify(accountState));
+    }else{
+      accountState={authenticated:false,coins:0,xp:0,level:1,streak:0,isPro:false,referralCode:'',authState:d?.authState||'unknown'};
+      localStorage.removeItem('asoland_account_cache_v1');
     }
   }catch(e){
-    try{accountState={...accountState,...JSON.parse(localStorage.getItem('asoland_account_cache_v1')||'{}')}}catch(_){}
+    accountState={authenticated:false,coins:0,xp:0,level:1,streak:0,isPro:false,referralCode:'',authState:e.authState||'unknown'};
+    localStorage.removeItem('asoland_account_cache_v1');
   }
   renderDashboard();
   return accountState;
@@ -143,21 +177,30 @@ function renderDashboard(){
 }
 
 async function claimDailyReward(){
-  const btn=document.getElementById('dailyBtn');
-  if(accountState.claimed){toast(t('rewardClaimed'));return;}
   const initData=await getInitDataWithRetry(24,250);
-  if(!initData){toast(authFailureMessage());return;}
-  if(btn)btn.disabled=true;
+  if(!initData){accountState={...accountState,authenticated:false,authState:'missing'};renderDashboard();toast(authFailureMessage());return;}
   try{
+    const current=await api('/api/account?initData='+encodeURIComponent(initData));
+    if(!current?.authenticated){
+      accountState={authenticated:false,coins:0,xp:0,level:1,streak:0,isPro:false,referralCode:'',authState:current?.authState||'unknown'};
+      localStorage.removeItem('asoland_account_cache_v1');
+      renderDashboard();
+      toast(authFailureMessage());
+      return;
+    }
+    accountState={...accountState,...current,authenticated:true};
+    if(accountState.claimed){toast(t('rewardClaimed'));renderDashboard();return;}
     const d=await api('/api/rewards/daily',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData,language:lang})});
-    accountState={...accountState,...d,authenticated:true,claimed:true};
+    accountState={...accountState,...d,authenticated:true,claimed:!(!d.claimed)};
     localStorage.setItem('asoland_account_cache_v1',JSON.stringify(accountState));
-    renderDashboard(); toast(`🎁 +${d.reward||0} 🪙`); try{tg?.HapticFeedback?.notificationOccurred?.('success')}catch(_){ }
-  }catch(e){if(btn)btn.disabled=false;toast(e.message)}
+    renderDashboard(); toast(`🎁 +${d.reward||0} 🪙`); try{telegramWebApp()?.HapticFeedback?.notificationOccurred?.('success')}catch(_){ }
+  }catch(e){
+    if(e.authState){accountState={...accountState,authenticated:false,authState:e.authState};localStorage.removeItem('asoland_account_cache_v1');renderDashboard();}
+    toast(e.message||t('error'));
+  }
 }
 
-
-function toggleFavorite(k){favorites=favorites.includes(k)?favorites.filter(x=>x!==k):[...favorites,k].slice(-12);saveLists();renderTools();try{tg?.HapticFeedback?.selectionChanged?.()}catch(e){}}
+function toggleFavorite(k){favorites=favorites.includes(k)?favorites.filter(x=>x!==k):[...favorites,k].slice(-12);saveLists();renderTools();try{telegramWebApp()?.HapticFeedback?.selectionChanged?.()}catch(e){}}
 function recordUse(k){recent=[k,...recent.filter(x=>x!==k)].slice(0,8);saveLists();renderDashboard();}
 function toolLabel(k){return t(k)}
 function toolDesc(k){return desc[lang]?.[k]||''}
@@ -204,7 +247,7 @@ function renderTools(){
  cats.forEach(b=>b.addEventListener('click',()=>{cats.forEach(x=>x.classList.remove('active'));b.classList.add('active');activeCat=b.dataset.cat;paint(search.value)}));
 }
 function chatPanel(){panel('chatPanel');document.getElementById("chatPanel").innerHTML=`<div class="panel-head">🤖 <b>${t('aiChat')}</b></div><div class="messages" id="messages"><div class="msg bot">${t('aiHint')}</div></div><div class="composer"><textarea id="prompt" placeholder="${t('aiHint')}" rows="1"></textarea><button id="send">➤</button></div>`;document.querySelector('#send').onclick=sendAI;document.querySelector('#prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAI()}}}
-async function sendAI(){const p=document.querySelector('#prompt'),v=p.value.trim();if(!v)return;const m=document.querySelector('#messages');m.insertAdjacentHTML('beforeend',`<div class="msg user">${esc(v)}</div>`);p.value='';m.insertAdjacentHTML('beforeend',`<div class="msg bot" id="aiLoad">${t('working')}</div>`);try{const d=await api('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:v,language:lang,initData:tg?.initData||''})});document.querySelector('#aiLoad')?.remove();m.insertAdjacentHTML('beforeend',`<div class="msg bot">${esc(d.reply)}</div>`);m.scrollTop=m.scrollHeight}catch(e){document.querySelector('#aiLoad').textContent=e.message}}
+async function sendAI(){const p=document.querySelector('#prompt'),v=p.value.trim();if(!v)return;const m=document.querySelector('#messages');m.insertAdjacentHTML('beforeend',`<div class="msg user">${esc(v)}</div>`);p.value='';m.insertAdjacentHTML('beforeend',`<div class="msg bot" id="aiLoad">${t('working')}</div>`);try{const d=await api('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:v,language:lang,initData:telegramWebApp()?.initData||''})});document.querySelector('#aiLoad')?.remove();m.insertAdjacentHTML('beforeend',`<div class="msg bot">${esc(d.reply)}</div>`);m.scrollTop=m.scrollHeight}catch(e){document.querySelector('#aiLoad').textContent=e.message}}
 function openTool(k){recordUse(k);if(k==='aiChat'){chatPanel();return}if(k==='file'){filePanel();return}if(k==='teacher'){teacherPanel();return}if(k==='vision'){visionPanel();return}if(k==='prices'){pricesPanel();return}if(k==='weather'){weatherPanel();return}if(k==='text'){textToolsPanel();return}if(k==='more'){morePanel();return}if(k==='voice'){voicePanel();return}if(k==='sticker'){stickerPanel();return}if(k==='download'){downloadPanel();return}}
 function simplePanel(title,html){
   panel('toolPanel');
@@ -232,7 +275,7 @@ function fancyPanel(){simplePanel('✍ '+t('fancy'),`<textarea id="fancyIn"></te
 function qrPanel(){simplePanel('📱 '+t('qr'),`<input id="qrIn" placeholder="${t('qrPlaceholder')}"><button class="primary wide" onclick="doQR()">${t('create')}</button><div id="qrOut" class="result"></div>`)}async function doQR(){qrOut.textContent=t('working');try{const d=await api('/api/qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:qrIn.value})});qrOut.innerHTML=`<img src="${d.url}" style="max-width:100%;border-radius:12px"><br><a class="download" href="${d.url}" download>دانلود QR</a>`}catch(e){qrOut.textContent=e.message}}
 function shortPanel(){simplePanel('🔗 '+t('short'),`<input id="shortIn" placeholder="${t('urlPlaceholder')}"><button class="primary wide" onclick="doShort()">${t('create')}</button><div id="shortOut" class="result"></div>`)}async function doShort(){shortOut.textContent=t('working');try{const d=await api('/api/short-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:shortIn.value})});shortOut.innerHTML=`<a href="${esc(d.url)}" target="_blank">${esc(d.url)}</a>`}catch(e){shortOut.textContent=e.message}}
 function morePanel(){simplePanel('⚙️ '+t('more'),`<div class="more-grid"><button onclick="downloadPanel()">📥 ${t('download')}</button><button onclick="musicPanel()">🎵 ${t('music')}</button><button onclick="lyricsPanel()">📜 ${t('lyrics')}</button><button onclick="stickerPanel()">🖼️ ${t('sticker')}</button><button onclick="subtitlePanel()">🎬 ${t('subtitle')}</button><button onclick="calcPanel()">🧮 ${t('calculator')}</button><button onclick="currencyPanel()">💱 ${t('currency')}</button><button onclick="fortunePanel()">🔮 ${t('fortune')}</button><button onclick="newsPanel()">📰 ${t('news')}</button><button onclick="studentPanel()">🎓 ${t('student')}</button><button onclick="calendarPanel()">📅 ${t('calendar')}</button><button onclick="configPanel()">🩷 ${t('config')}</button><button onclick="alertsPanel()">🔔 ${t('alerts')}</button><button onclick="chartPanel()">📊 ${t('chart')}</button><button onclick="reminderPanel()">⏰ ${t('reminder')}</button></div>`)}
-function downloadPanel(){simplePanel('📥 '+t('download'),`<input id="downloadUrl" placeholder="${t('source')}"><select id="quality"><option value="360">360p</option><option value="720" selected>720p</option><option value="1080">1080p</option><option value="audio">MP3</option></select><button class="primary wide" id="downloadBtn" onclick="doDownload()">${t('download')}</button><div id="downloadOut" class="result"></div>`)}async function doDownload(){const btn=document.getElementById('downloadBtn');if(btn.disabled)return;btn.disabled=true;const label=btn.textContent;btn.textContent=t('working');downloadOut.textContent=t('working');try{const d=await api('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:downloadUrl.value,quality:quality.value,user_id:tg?.initData||'',initData:tg?.initData||''})});downloadOut.innerHTML=`<b>${esc(d.title||'')}</b><br>${d.sent?'✅ به ربات ارسال شد':'⚠️ آماده دانلود است'}<br><a class="download" href="${d.url}" download>${d.audio?t('downloadMp3'):t('video')}</a>`}catch(e){const msg=String(e.message||e);downloadOut.innerHTML=e.status===429||/429|Too Many Requests|Render/.test(msg)?`<div class="error">⚠️ ${esc(msg)}</div>`:`<div class="error">❌ ${esc(msg)}</div>`}finally{btn.disabled=false;btn.textContent=label}}
+function downloadPanel(){simplePanel('📥 '+t('download'),`<input id="downloadUrl" placeholder="${t('source')}"><select id="quality"><option value="360">360p</option><option value="720" selected>720p</option><option value="1080">1080p</option><option value="audio">MP3</option></select><button class="primary wide" id="downloadBtn" onclick="doDownload()">${t('download')}</button><div id="downloadOut" class="result"></div>`)}async function doDownload(){const btn=document.getElementById('downloadBtn');if(btn.disabled)return;btn.disabled=true;const label=btn.textContent;btn.textContent=t('working');downloadOut.textContent=t('working');try{const d=await api('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:downloadUrl.value,quality:quality.value,user_id:telegramWebApp()?.initData||'',initData:telegramWebApp()?.initData||''})});downloadOut.innerHTML=`<b>${esc(d.title||'')}</b><br>${d.sent?'✅ به ربات ارسال شد':'⚠️ آماده دانلود است'}<br><a class="download" href="${d.url}" download>${d.audio?t('downloadMp3'):t('video')}</a>`}catch(e){const msg=String(e.message||e);downloadOut.innerHTML=e.status===429||/429|Too Many Requests|Render/.test(msg)?`<div class="error">⚠️ ${esc(msg)}</div>`:`<div class="error">❌ ${esc(msg)}</div>`}finally{btn.disabled=false;btn.textContent=label}}
 function musicPanel(){simplePanel('🎵 '+t('music'),`<input id="musicQ"><button class="primary wide" onclick="searchMusic()">${t('search')}</button><div id="musicOut" class="result"></div>`)}async function searchMusic(){musicOut.textContent=t('working');try{const d=await api('/api/music/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:musicQ.value})});musicOut.innerHTML=d.results.map((x,i)=>`<div style="margin:8px 0"><b>${i+1}. ${esc(x.title)}</b><br><a class="download" href="${esc(x.url)}" target="_blank">YouTube</a></div>`).join('')||t('error')}catch(e){musicOut.textContent=e.message}}
 function lyricsPanel(){simplePanel('📜 '+t('lyrics'),`<input id="artist" placeholder="${t('artist')}"><input id="songTitle" placeholder="${t('songTitle')}"><button class="primary wide" onclick="doLyrics()">${t('search')}</button><div id="lyricsOut" class="result"></div>`)}async function doLyrics(){lyricsOut.textContent=t('working');try{const d=await api('/api/music/lyrics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({artist:artist.value,title:songTitle.value})});lyricsOut.textContent=d.text}catch(e){lyricsOut.textContent=e.message}}
 function stickerPanel(){simplePanel('🖼️ '+t('sticker'),`<div class="sticker-composer"><textarea id="stickerTextInput" autocomplete="off" spellcheck="false" placeholder="${t('stickerText')}"></textarea><select id="stickerMode"><option value="text">${t('stickerText')}</option><option value="image">${t('stickerPhoto')}</option></select><label class="upload" id="stickerPhotoWrap" style="display:none"><input id="stickerPhotoFile" type="file" accept="image/*"><span>🖼️ ${t('chooseImage')}</span></label><div class="row"><input id="stickerBg" value="#4080b4" placeholder="${t('stickerBg')}"><input id="stickerFg" value="#ffffff" placeholder="${t('stickerFg')}"></div><button type="button" class="primary wide" id="stickerCreateBtn">${t('create')}</button><div id="stickerOut" class="result"></div></div>`);
@@ -246,11 +289,11 @@ async function doSticker(){
  if(!text){outEl.textContent=t('stickerText'); input?.focus(); return;}
  if(mode==='image'&&!file){outEl.textContent=t('chooseImage'); return;}
  outEl.textContent=t('working');
- const fd=new FormData(); fd.append('text',text); fd.append('mode',mode); fd.append('bg',document.getElementById('stickerBg')?.value || '#4080b4'); fd.append('fg',document.getElementById('stickerFg')?.value || '#ffffff'); fd.append('initData', tg?.initData || '');
+ const fd=new FormData(); fd.append('text',text); fd.append('mode',mode); fd.append('bg',document.getElementById('stickerBg')?.value || '#4080b4'); fd.append('fg',document.getElementById('stickerFg')?.value || '#ffffff'); fd.append('initData', telegramWebApp()?.initData || '');
  if(file) fd.append('file',file,file.name);
  try{const d=await api('/api/sticker',{method:'POST',body:fd});
    outEl.innerHTML=`<div class="sticker-preview-wrap"><img class="sticker-preview" src="${d.url}" alt="sticker"><div class="sticker-success">${d.sent?'✅ '+esc(t('stickerSent')):'✅ '+esc(t('stickerReady'))}</div><a class="download" href="${d.url}" download>${t('downloadSticker')}</a></div>`;
-   try{tg?.HapticFeedback?.notificationOccurred?.('success')}catch(_){ }
+   try{telegramWebApp()?.HapticFeedback?.notificationOccurred?.('success')}catch(_){ }
  }catch(e){outEl.textContent=e.message}
 }
 function subtitlePanel(){simplePanel('🎬 '+t('subtitle'),`<select id="subLang"><option value="ckb">${t('ckb')}</option><option value="fa">${t('fa')}</option><option value="en">${t('en')}</option></select><label class="upload"><input id="subFile" type="file" accept="video/*"><span>🎬 ${t('chooseImage')}</span></label><button class="primary wide" onclick="doSubtitle()">${t('create')}</button><div id="subOut" class="result"></div>`)}async function doSubtitle(){if(!subFile.files[0]){subOut.textContent=t('noMedia');return}subOut.textContent=t('working');const fd=new FormData();fd.append('file',subFile.files[0]);try{const d=await api('/api/subtitle?target_language='+subLang.value,{method:'POST',body:fd});subOut.innerHTML=`${d.video_url?`<a class="download" href="${d.video_url}" download>${t('video')}</a>`:''}<br><a class="download" href="${d.srt_url}" download>${t('srt')}</a>`}catch(e){subOut.textContent=e.message}}
@@ -261,8 +304,8 @@ function calendarPanel(){simpleEndpoint('/api/calendar?language='+lang,'📅 '+t
 function newsPanel(){simplePanel('📰 '+t('news'),`<div class="more-grid">${['general','tech','economy','crypto','student'].map(c=>`<button onclick="getNews('${c}')">${t(c==='student'?'education':c)}</button>`).join('')}</div><div id="newsOut" class="result"></div>`)}async function getNews(c){newsOut.textContent=t('working');try{const d=await api('/api/news',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:c,language:lang})});newsOut.textContent=d.text}catch(e){newsOut.textContent=e.message}}
 function studentPanel(){simplePanel('🎓 '+t('student'),`<textarea id="studentIn" placeholder="${t('studentPlaceholder')}"></textarea><button class="primary wide" onclick="doStudent()">${t('solve')}</button><div id="studentOut" class="result"></div>`)}async function doStudent(){studentOut.textContent=t('working');try{const d=await api('/api/student',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:studentIn.value,language:lang})});studentOut.textContent=d.text}catch(e){studentOut.textContent=e.message}}
 function configPanel(){simplePanel('🩷 '+t('config'),`<select id="proto"><option>vless</option><option>vmess</option><option>trojan</option><option>ss</option></select><button class="primary wide" onclick="getConfigs()">${t('search')}</button><div id="configOut" class="result"></div>`)}async function getConfigs(){configOut.textContent=t('working');try{const d=await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:proto.value})});configOut.textContent=d.configs.join('\n\n')}catch(e){configOut.textContent=e.message}}
-function alertsPanel(){simplePanel('🔔 '+t('alerts'),`<div class="row"><input id="alertSymbol" placeholder="${t('alertSymbolPlaceholder')}"><input id="alertTarget" type="number" placeholder="${t('target')}"></div><select id="alertDir"><option value="above">${t('above')}</option><option value="below">${t('below')}</option></select><button class="primary wide" onclick="createAlert()">${t('create')}</button><div id="alertOut" class="result"></div>`);loadAlerts()}async function loadAlerts(){try{const d=await api('/api/alerts?user_id='+encodeURIComponent(tg?.initData||''));alertOut.textContent=d.alerts.map((x,i)=>`${i+1}. ${x.symbol} ${x.direction} ${x.target}`).join('\n')||'—'}catch{}}async function createAlert(){try{await api('/api/alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:alertSymbol.value,target:Number(alertTarget.value),direction:alertDir.value,user_id:tg?.initData||''})});loadAlerts()}catch(e){alertOut.textContent=e.message}}
-function reminderPanel(){simplePanel('⏰ '+t('reminder'),`<input id="remText" placeholder="${t('reminder')}"><input id="remDue" type="datetime-local"><button class="primary wide" onclick="createReminder()">${t('create')}</button><div id="remOut" class="result"></div>`);loadReminders()}async function loadReminders(){try{const d=await api('/api/reminders?user_id='+encodeURIComponent(tg?.initData||''));remOut.textContent=d.reminders.map((x,i)=>`${i+1}. ${x.text} ${x.due}`).join('\n')||'—'}catch{}}async function createReminder(){try{await api('/api/reminders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:remText.value,due:remDue.value,user_id:tg?.initData||''})});loadReminders()}catch(e){remOut.textContent=e.message}}
+function alertsPanel(){simplePanel('🔔 '+t('alerts'),`<div class="row"><input id="alertSymbol" placeholder="${t('alertSymbolPlaceholder')}"><input id="alertTarget" type="number" placeholder="${t('target')}"></div><select id="alertDir"><option value="above">${t('above')}</option><option value="below">${t('below')}</option></select><button class="primary wide" onclick="createAlert()">${t('create')}</button><div id="alertOut" class="result"></div>`);loadAlerts()}async function loadAlerts(){try{const d=await api('/api/alerts?user_id='+encodeURIComponent(telegramWebApp()?.initData||''));alertOut.textContent=d.alerts.map((x,i)=>`${i+1}. ${x.symbol} ${x.direction} ${x.target}`).join('\n')||'—'}catch{}}async function createAlert(){try{await api('/api/alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:alertSymbol.value,target:Number(alertTarget.value),direction:alertDir.value,user_id:telegramWebApp()?.initData||''})});loadAlerts()}catch(e){alertOut.textContent=e.message}}
+function reminderPanel(){simplePanel('⏰ '+t('reminder'),`<input id="remText" placeholder="${t('reminder')}"><input id="remDue" type="datetime-local"><button class="primary wide" onclick="createReminder()">${t('create')}</button><div id="remOut" class="result"></div>`);loadReminders()}async function loadReminders(){try{const d=await api('/api/reminders?user_id='+encodeURIComponent(telegramWebApp()?.initData||''));remOut.textContent=d.reminders.map((x,i)=>`${i+1}. ${x.text} ${x.due}`).join('\n')||'—'}catch{}}async function createReminder(){try{await api('/api/reminders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:remText.value,due:remDue.value,user_id:telegramWebApp()?.initData||''})});loadReminders()}catch(e){remOut.textContent=e.message}}
 async function profilePanel(){
   panel('profilePanel');
   const u=currentUser();
@@ -288,14 +331,14 @@ document.getElementById('lang').onclick=()=>{
  m.innerHTML=`<div class="language-title">🌐 ${esc(t('language'))}</div><button data-l="fa">🇮🇷 <span>${esc(t('fa'))}</span></button><button data-l="ckb">☀️ <span>${esc(t('ckb'))}</span></button><button data-l="en">🇬🇧 <span>${esc(t('en'))}</span></button>`;
  document.body.appendChild(m);
  requestAnimationFrame(()=>m.classList.add('show'));
- m.querySelectorAll('button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;localStorage.setItem('asoland_lang',lang);m.classList.remove('show');setTimeout(()=>m.remove(),180);applyLang();try{tg?.HapticFeedback?.selectionChanged?.()}catch(e){}});
+ m.querySelectorAll('button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;localStorage.setItem('asoland_lang',lang);m.classList.remove('show');setTimeout(()=>m.remove(),180);applyLang();try{telegramWebApp()?.HapticFeedback?.selectionChanged?.()}catch(e){}});
  setTimeout(()=>{const close=e=>{if(!m.contains(e.target)&&e.target.id!=='lang'){m.classList.remove('show');setTimeout(()=>m.remove(),180);document.removeEventListener('pointerdown',close)}};document.addEventListener('pointerdown',close)},0);
 };
 function applyTheme(){document.documentElement.dataset.theme=theme;document.body.classList.toggle('light-mode',theme==='light');const b=document.getElementById('themeToggle');if(b){b.textContent=theme==='light'?'🌙':'☀️';b.setAttribute('aria-label',theme==='light'?t('darkMode'):t('lightMode'));b.title=theme==='light'?t('darkMode'):t('lightMode')}try{tg?.setHeaderColor?.(theme==='light'?'#f3f7f3':'#080b0e');tg?.setBackgroundColor?.(theme==='light'?'#f3f7f3':'#080b0e')}catch(e){}}
 document.getElementById('heroAi')?.addEventListener('click',()=>chatPanel());
-const themeBtn=document.getElementById('themeToggle');if(themeBtn)themeBtn.onclick=()=>{theme=theme==='dark'?'light':'dark';localStorage.setItem('asoland_theme',theme);applyTheme();try{tg?.HapticFeedback?.impactOccurred?.('light')}catch(e){}};
+const themeBtn=document.getElementById('themeToggle');if(themeBtn)themeBtn.onclick=()=>{theme=theme==='dark'?'light':'dark';localStorage.setItem('asoland_theme',theme);applyTheme();try{telegramWebApp()?.HapticFeedback?.impactOccurred?.('light')}catch(e){}};
 window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change',e=>{if(!localStorage.getItem('asoland_theme')){theme=e.matches?'light':'dark';applyTheme()}});
-document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(b.dataset.tab==='home')home();if(b.dataset.tab==='ai')chatPanel();if(b.dataset.tab==='tools')morePanel();if(b.dataset.tab==='profile')profilePanel();setTimeout(()=>{const target=document.querySelector('.panel[style*="display: block"]')||document.querySelector('.panel:not([style])');if(target&&getComputedStyle(target).display!=='none')target.scrollIntoView({behavior:'smooth',block:'start'})},80)});tg?.BackButton?.onClick(home);try{tg?.ready();tg?.expand();}catch(e){} refreshMiniUser(); renderDashboard(); syncAccount(); applyLang(); applyTheme(); home();
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(b.dataset.tab==='home')home();if(b.dataset.tab==='ai')chatPanel();if(b.dataset.tab==='tools')morePanel();if(b.dataset.tab==='profile')profilePanel();setTimeout(()=>{const target=document.querySelector('.panel[style*="display: block"]')||document.querySelector('.panel:not([style])');if(target&&getComputedStyle(target).display!=='none')target.scrollIntoView({behavior:'smooth',block:'start'})},80)});telegramWebApp()?.BackButton?.onClick(home);try{tg?.ready();tg?.expand();}catch(e){} refreshMiniUser(); renderDashboard(); syncAccount(); applyLang(); applyTheme(); home();
 
 function compressImagePanel(){simplePanel('🗜️ '+t('compressImageTitle'),`<label class="upload"><input id="ciFile" type="file" accept="image/*"><span>🖼️ ${t('chooseImage')}</span></label><button class="primary wide" onclick="doCompressImage()">${t('create')}</button><div id="ciOut" class="result"></div>`)}
 async function doCompressImage(){if(!ciFile.files[0])return;ciOut.textContent=t('working');const fd=new FormData();fd.append('file',ciFile.files[0]);try{const d=await api('/api/compress-image',{method:'POST',body:fd});ciOut.innerHTML=`<a class="download" href="${d.url}" download>${t('downloadImage')}</a>`}catch(e){ciOut.textContent=e.message}}
