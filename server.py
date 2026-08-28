@@ -337,6 +337,79 @@ async def prices(language: str = "fa"):
         raise HTTPException(502, str(e)[:300])
 
 
+# Open-Meteo's geocoding index is built from GeoNames and mostly matches the
+# *indexed* spelling of a place (usually English/romanized) via prefix matching.
+# Re-querying with a different `language` value only changes which localized
+# name comes back — it does NOT translate the search term itself. So a Persian
+# or Kurdish city name that has no Farsi/Sorani alternate name indexed simply
+# never matches, even though the fallback below always ran. We fix this by:
+#  1) trying the raw query as typed,
+#  2) trying a curated FA/CKB -> EN translation for common cities so the
+#     Latin-indexed name is what actually gets searched,
+#  3) falling back to OpenStreetMap/Nominatim, which indexes Persian and
+#     Kurdish names far more completely than GeoNames does.
+_CITY_ALIASES = {
+    "تهران": "Tehran", "مشهد": "Mashhad", "اصفهان": "Isfahan", "اصفهان‌": "Isfahan",
+    "کرج": "Karaj", "شیراز": "Shiraz", "تبریز": "Tabriz", "قم": "Qom", "اهواز": "Ahvaz",
+    "کرمانشاه": "Kermanshah", "ارومیه": "Urmia", "رشت": "Rasht", "زاهدان": "Zahedan",
+    "همدان": "Hamadan", "کرمان": "Kerman", "یزد": "Yazd", "اردبیل": "Ardabil",
+    "بندرعباس": "Bandar Abbas", "اراک": "Arak", "قزوین": "Qazvin", "زنجان": "Zanjan",
+    "سنندج": "Sanandaj", "خرم‌آباد": "Khorramabad", "خرم آباد": "Khorramabad",
+    "گرگان": "Gorgan", "ساری": "Sari", "بوشهر": "Bushehr", "بجنورد": "Bojnord",
+    "ایلام": "Ilam", "یاسوج": "Yasuj", "شهرکرد": "Shahrekord", "سمنان": "Semnan",
+    "بیرجند": "Birjand", "پیرانشهر": "Piranshahr", "مهاباد": "Mahabad", "بانه": "Baneh",
+    "سقز": "Saqqez", "مریوان": "Marivan", "بوکان": "Bukan", "نقده": "Naghadeh",
+    "هه‌ولێر": "Erbil", "هەولێر": "Erbil", "اربیل": "Erbil", "سلێمانی": "Sulaymaniyah",
+    "سلیمانیه": "Sulaymaniyah", "دهۆک": "Duhok", "دهوک": "Duhok", "کەرکووک": "Kirkuk",
+    "کرکوک": "Kirkuk", "بغداد": "Baghdad", "بەغدا": "Baghdad", "نجف": "Najaf",
+    "کربلا": "Karbala", "بصره": "Basra",
+}
+
+async def _geocode_city(client, city: str, language: str):
+    async def _search(name: str, lang: str):
+        r = await client.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": name, "count": 5, "language": lang, "format": "json"},
+        )
+        r.raise_for_status()
+        return (r.json() or {}).get("results") or []
+
+    lang_param = {"fa": "fa", "ckb": "en", "en": "en"}.get(language, "fa")
+
+    # 1) exact term as typed
+    results = await _search(city, lang_param)
+    # 2) same term, English display language (helps some partial matches)
+    if not results:
+        results = await _search(city, "en")
+    # 3) curated FA/CKB -> EN alias for common regional cities
+    alias = _CITY_ALIASES.get(city) or _CITY_ALIASES.get(city.replace("‌", " ").strip())
+    if not results and alias:
+        results = await _search(alias, "en")
+    if results:
+        return results[0], None
+
+    # 4) Nominatim (OpenStreetMap) as a last resort — its index has far
+    # better coverage of Persian/Kurdish place names than GeoNames does.
+    try:
+        r = await client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": alias or city, "format": "jsonv2", "limit": 1, "accept-language": lang_param},
+            headers={"User-Agent": "AsoLand-MiniApp/1.0"},
+        )
+        r.raise_for_status()
+        items = r.json() or []
+        if items:
+            it = items[0]
+            return {
+                "name": (it.get("display_name") or city).split(",")[0].strip(),
+                "latitude": float(it["lat"]), "longitude": float(it["lon"]),
+                "country": (it.get("display_name") or "").split(",")[-1].strip(),
+            }, None
+    except Exception:
+        pass
+    return None, f"شهر «{city}» پیدا نشد"
+
+
 @app.post("/api/weather")
 async def weather(payload: WeatherIn):
     city = payload.city.strip()
@@ -345,23 +418,9 @@ async def weather(payload: WeatherIn):
     try:
         # Direct Open-Meteo call keeps Mini App weather independent from Bot handlers.
         async with bot.httpx.AsyncClient(timeout=15.0) as client:
-            geo = await client.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": city, "count": 5, "language": {"fa":"fa","ckb":"en","en":"en"}.get(payload.language,"fa"), "format": "json"},
-            )
-            geo.raise_for_status()
-            results = (geo.json() or {}).get("results") or []
-            if not results:
-                geo = await client.get(
-                    "https://geocoding-api.open-meteo.com/v1/search",
-                    params={"name": city, "count": 5, "language": "en", "format": "json"},
-                )
-                geo.raise_for_status()
-                results = (geo.json() or {}).get("results") or []
-            if not results:
-                raise HTTPException(404, f"شهر «{city}» پیدا نشد")
-
-            place = results[0]
+            place, err = await _geocode_city(client, city, payload.language)
+            if err:
+                raise HTTPException(404, err)
             lat, lon = place["latitude"], place["longitude"]
             forecast = await client.get(
                 "https://api.open-meteo.com/v1/forecast",

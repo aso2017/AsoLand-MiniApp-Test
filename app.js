@@ -37,10 +37,37 @@ async function getInitDataWithRetry(maxTries=20,delay=250){
   for(let i=0;i<maxTries;i++){
     const value=tg?.initData||'';
     if(value)return value;
-    await new Promise(resolve=>setTimeout(resolve,delay));
+    // Some Android/desktop Telegram clients only populate initData once the
+    // WebView tab actually becomes visible/focused, not on first paint.
+    if(document.hidden){
+      await new Promise(resolve=>{
+        const onVis=()=>{document.removeEventListener('visibilitychange',onVis);resolve()};
+        document.addEventListener('visibilitychange',onVis);
+        setTimeout(()=>{document.removeEventListener('visibilitychange',onVis);resolve()},delay*4);
+      });
+    }else{
+      await new Promise(resolve=>setTimeout(resolve,delay));
+    }
   }
   return '';
 }
+
+// Distinguishes "the Telegram bridge script never loaded" (e.g. opened
+// outside Telegram, or telegram.org was unreachable) from "we're inside
+// Telegram but this tab wasn't launched as a signed Web App" (e.g. opened
+// via a plain shared link/button instead of the menu button or a
+// web_app-type button) so the user gets an accurate message instead of a
+// generic "not authenticated" toast either way.
+function authFailureReason(){
+  if(!window.Telegram||!window.Telegram.WebApp) return 'no-bridge';
+  return 'no-signed-data';
+}
+const AUTH_MSG={
+  fa:{'no-bridge':'اتصال به تلگرام برقرار نشد. لطفاً از داخل اپلیکیشن تلگرام (نه مرورگر) وارد شو.','no-signed-data':'این صفحه از راه درست باز نشده. از دکمهٔ منوی ربات در تلگرام وارد AsoLand شو.'},
+  ckb:{'no-bridge':'پەیوەندی لەگەڵ تەلەگرام دروست نەبوو. لە ناو ئەپی تەلەگرامەوە بیکەرەوە، نەک بڕاوزەر.','no-signed-data':'ئەم پەڕەیە بە ڕێگای ڕاست نەکراوەتەوە. لە دوگمەی مینیوی بۆتەکە لە تەلەگرام AsoLand بکەرەوە.'},
+  en:{'no-bridge':'Could not connect to Telegram. Please open this inside the Telegram app, not a browser.','no-signed-data':'This page wasn\u2019t opened the right way. Open AsoLand from the bot\u2019s menu button in Telegram.'}
+};
+function authFailureMessage(){return AUTH_MSG[lang]?.[authFailureReason()]||t('notAuth')}
 
 function refreshMiniUser(){
   renderMiniUser();
@@ -118,8 +145,8 @@ function renderDashboard(){
 async function claimDailyReward(){
   const btn=document.getElementById('dailyBtn');
   if(accountState.claimed){toast(t('rewardClaimed'));return;}
-  const initData=await getInitDataWithRetry(20,250);
-  if(!initData){toast(t('notAuth'));return;}
+  const initData=await getInitDataWithRetry(24,250);
+  if(!initData){toast(authFailureMessage());return;}
   if(btn)btn.disabled=true;
   try{
     const d=await api('/api/rewards/daily',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData,language:lang})});
@@ -251,7 +278,7 @@ async function profilePanel(){
     const c=document.getElementById('accountCoins'),x=document.getElementById('accountXp'),l=document.getElementById('accountLevel');
     if(c)c.textContent=String(d.coins||0); if(x)x.textContent=String(d.xp||0); if(l)l.textContent=String(d.level||1);
     if(result)result.innerHTML=`${t('auth')}<br>${t('user')}: ${esc(d.firstName||u?.first_name||'')}<br>${d.username?'@'+esc(d.username):''}<br>🔥 ${d.streak||0} ${t('recent')}`;
-  }else if(result) result.textContent=t('notAuth');
+  }else if(result) result.textContent=authFailureMessage();
 }
 
 document.getElementById('lang').onclick=()=>{
@@ -264,7 +291,7 @@ document.getElementById('lang').onclick=()=>{
  m.querySelectorAll('button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;localStorage.setItem('asoland_lang',lang);m.classList.remove('show');setTimeout(()=>m.remove(),180);applyLang();try{tg?.HapticFeedback?.selectionChanged?.()}catch(e){}});
  setTimeout(()=>{const close=e=>{if(!m.contains(e.target)&&e.target.id!=='lang'){m.classList.remove('show');setTimeout(()=>m.remove(),180);document.removeEventListener('pointerdown',close)}};document.addEventListener('pointerdown',close)},0);
 };
-function applyTheme(){document.documentElement.dataset.theme=theme;document.body.classList.toggle('light-mode',theme==='light');const b=document.getElementById('themeToggle');if(b){b.textContent=theme==='light'?'🌙':'☀️';b.setAttribute('aria-label',theme==='light'?t('darkMode'):t('lightMode'));b.title=theme==='light'?t('darkMode'):t('lightMode')}try{tg?.setHeaderColor?.(theme==='light'?'#F6F2FE':'#0F0B21');tg?.setBackgroundColor?.(theme==='light'?'#F6F2FE':'#0F0B21')}catch(e){}}
+function applyTheme(){document.documentElement.dataset.theme=theme;document.body.classList.toggle('light-mode',theme==='light');const b=document.getElementById('themeToggle');if(b){b.textContent=theme==='light'?'🌙':'☀️';b.setAttribute('aria-label',theme==='light'?t('darkMode'):t('lightMode'));b.title=theme==='light'?t('darkMode'):t('lightMode')}try{tg?.setHeaderColor?.(theme==='light'?'#f3f7f3':'#080b0e');tg?.setBackgroundColor?.(theme==='light'?'#f3f7f3':'#080b0e')}catch(e){}}
 document.getElementById('heroAi')?.addEventListener('click',()=>chatPanel());
 const themeBtn=document.getElementById('themeToggle');if(themeBtn)themeBtn.onclick=()=>{theme=theme==='dark'?'light':'dark';localStorage.setItem('asoland_theme',theme);applyTheme();try{tg?.HapticFeedback?.impactOccurred?.('light')}catch(e){}};
 window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change',e=>{if(!localStorage.getItem('asoland_theme')){theme=e.matches?'light':'dark';applyTheme()}});
