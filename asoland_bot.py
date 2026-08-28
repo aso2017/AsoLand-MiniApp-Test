@@ -2845,31 +2845,6 @@ async def _ensure_persian_output(text: str) -> str:
         logger.warning("Persian-only correction failed: %s", exc)
         return text
 
-async def groq_chat(messages: list, *, temperature: float = 0.7, max_tokens: int = 1024, timeout: float = 60.0) -> str:
-    """Reliable Groq chat wrapper used by AI Chat and English Teacher."""
-    if not GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    payload = {"model": GROQ_CHAT_MODEL, "messages": messages, "temperature": temperature, "max_completion_tokens": max_tokens}
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(GROQ_CHAT_URL, headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}, json=payload)
-    if resp.status_code >= 400:
-        try:
-            detail = resp.json().get("error", {})
-            if isinstance(detail, dict): detail = detail.get("message") or detail
-        except Exception:
-            detail = resp.text
-        raise RuntimeError(f"Groq HTTP {resp.status_code}: {str(detail)[:500]}")
-    data = resp.json()
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Invalid Groq response: {data!r}") from exc
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("Groq returned an empty response")
-    content = content.strip()
-    return await _ensure_persian_output(content)
-
-
 def _valid_api_key(value: str) -> bool:
     return bool(value and not value.startswith("PASTE_YOUR_"))
 
@@ -3032,10 +3007,13 @@ def get_english_teacher_prompt(level: str = "intermediate",
 
 async def translate_text(text: str) -> str:
     try:
-        return await groq_chat([
+        content, error = await groq_chat([
             {"role":"system","content":"Translate to the other language (Persian↔English). Only return the translation."},
             {"role":"user","content":text},
         ], temperature=0.2, max_tokens=1200, timeout=45.0)
+        if error:
+            logger.warning("Translation error: %s", error)
+        return content or "❌ خطا در ترجمه."
     except Exception as e:
         logger.exception("Translation error: %s", e)
         return "❌ خطا در ترجمه."

@@ -26,7 +26,8 @@ COPY --from=deno /deno /usr/local/bin/deno
 RUN deno --version
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt \
+    && pip install --no-cache-dir --upgrade yt-dlp
 
 # Secrets are supplied by Render Environment Variables/Secret Files.
 # Do NOT copy .env or .env.example into the image.

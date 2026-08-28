@@ -819,12 +819,24 @@ async def download(payload: DownloadIn):
             raise RuntimeError("BOT_TOKEN در Environment Variables تنظیم نشده است")
         caption = str(result.get("title") or path.stem)[:900]
         is_audio = bool(result.get("is_audio", False) or quality == "audio")
+        # Telegram Bot API rejects video/audio uploads above ~50MB. Without this
+        # check the send_video/send_audio call below raised an opaque Telegram
+        # error and the Mini App showed "download failed" even though the file
+        # downloaded correctly. Large files now go through as a document instead
+        # (matches the fallback already used by bot.upload_file for the /download
+        # command in the Telegram bot itself).
+        file_size = path.stat().st_size
         async with TelegramBot(token) as tg_bot:
             with path.open("rb") as fh:
                 if is_audio:
                     await tg_bot.send_audio(chat_id=chat_id, audio=fh, caption=caption)
-                else:
+                elif file_size <= bot.MAX_FILE_SIZE:
                     await tg_bot.send_video(chat_id=chat_id, video=fh, caption=caption, supports_streaming=True)
+                else:
+                    await tg_bot.send_document(
+                        chat_id=chat_id, document=fh,
+                        caption=caption + "\n\n📦 فایل حجیم",
+                    )
 
         return {
             "ok": True,

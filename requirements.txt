@@ -6,7 +6,7 @@ pymupdf
 python-docx
 Pillow
 python-telegram-bot
-yt-dlp[default]
+yt-dlp[default]>=2025.06.01
 gallery-dl
 qrcode[pil]
 jdatetime
