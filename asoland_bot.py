@@ -1009,7 +1009,7 @@ def clean_num(text) -> int | None:
 def fmt_price(n):
     return f"{n:,}".replace(",", "٬") if n else "—"
 
-def normalize_text(text: str) -> str:
+def normalize_digits_text(text: str) -> str:
     if not text:
         return ""
     text = str(text).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
@@ -1025,7 +1025,7 @@ def parse_do_l4_summary(text: str) -> dict:
     """
     if not text:
         return {}
-    text = normalize_text(text)
+    text = normalize_digits_text(text)
     out = {}
 
     # Currency patterns (already تومان)
@@ -1072,7 +1072,7 @@ def parse_do_l4_live_dollar(text: str) -> int | None:
     """Parse live 'دلار فردایی تهران' posts for latest deal price."""
     if not text:
         return None
-    text = normalize_text(text)
+    text = normalize_digits_text(text)
     # Prefer معامله
     m = re.search(r"دلار\s*فردایی\s*تهران[^\d]{0,40}([\d,]+)[^\d]{0,15}معامله", text, re.IGNORECASE)
     if m:
@@ -1640,7 +1640,7 @@ async def get_dollar_rate() -> int | None:
 
 async def convert_currency(text: str) -> str:
     """تبدیل واحد پول با نرخ دلار لحظه‌ای."""
-    t = normalize_text(text).replace(",", "").replace("٬", "")
+    t = normalize_digits_text(text).replace(",", "").replace("٬", "")
     t = t.translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
     rate = await get_dollar_rate()
     if not rate:
