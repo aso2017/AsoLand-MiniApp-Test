@@ -10,28 +10,77 @@
 <body>
 
   <main class="app-container">
-    <header class="profile-header">
-      <div class="logo-wrapper">
-        <img src="logo.svg" alt="AsoLand Logo">
-      </div>
-      <h1 class="app-title">AsoLand</h1>
-      <p class="app-subtitle" id="user-welcome">در حال دریافت اطلاعات کاربر...</p>
-    </header>
+    <!-- صفحه ورود / تایید اولیه -->
+    <div id="onboarding-screen" class="screen active">
+      <header class="profile-header">
+        <div class="logo-wrapper">
+          <img src="logo.svg" alt="AsoLand Logo">
+        </div>
+        <h1 class="app-title">AsoLand</h1>
+        <p class="app-subtitle" id="user-welcome">در حال دریافت اطلاعات...</p>
+      </header>
 
-    <section class="stats-card">
-      <div class="stat-item">
-        <div class="stat-value" id="user-status">فعال</div>
-        <div class="stat-label">وضعیت حساب</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="user-id">---</div>
-        <div class="stat-label">شناسه کاربر</div>
-      </div>
-    </section>
+      <section class="stats-card">
+        <div class="stat-item">
+          <div class="stat-value" id="user-status">فعال</div>
+          <div class="stat-label">وضعیت حساب</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="user-id">---</div>
+          <div class="stat-label">شناسه کاربر</div>
+        </div>
+      </section>
 
-    <button class="btn-main" id="main-action-btn">
-      <span>تایید و ادامه</span>
-    </button>
+      <button class="btn-main" id="main-action-btn">
+        <span>تایید و ورود به داشبورد</span>
+      </button>
+    </div>
+
+    <!-- صفحه اصلی / داشبورد -->
+    <div id="dashboard-screen" class="screen">
+      <header class="dash-header">
+        <div class="user-info">
+          <div class="avatar-small" id="dash-avatar">A</div>
+          <div>
+            <h2 class="user-name" id="dash-username">کاربر آصولند</h2>
+            <span class="badge">سطح طلایی</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- کارت موجودی / آمار اصلی -->
+      <section class="balance-card">
+        <span class="card-label">اعتبار فعال</span>
+        <div class="card-value">۱,۲۵۰,۰۰۰ <small>تومان</small></div>
+      </section>
+
+      <!-- منوی دسترسی سریع -->
+      <div class="grid-menu">
+        <button class="grid-item">
+          <span class="icon">💼</span>
+          <span>خدمات</span>
+        </button>
+        <button class="grid-item">
+          <span class="icon">📊</span>
+          <span>گزارش‌ها</span>
+        </button>
+        <button class="grid-item">
+          <span class="icon">🚀</span>
+          <span>ارتقا</span>
+        </button>
+        <button class="grid-item">
+          <span class="icon">⚙️</span>
+          <span>تنظیمات</span>
+        </button>
+      </div>
+
+      <!-- نوار ناوبری پایین -->
+      <nav class="bottom-nav">
+        <button class="nav-item active">🏠 خانه</button>
+        <button class="nav-item">💎 خدمات</button>
+        <button class="nav-item">👤 پروفایل</button>
+      </nav>
+    </div>
   </main>
 
   <script src="app.js"></script>
