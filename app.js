@@ -16,11 +16,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('main-action-btn');
     btn.addEventListener('click', () => {
       tg.HapticFeedback?.impactOccurred('medium');
-      tg.sendData(JSON.stringify({ 
+
+      // ۱. تغییر وضعیت دکمه جهت بازخورد به کاربر
+      btn.disabled = true;
+      btn.innerHTML = '<span>در حال ثبت...</span>';
+
+      const payload = JSON.stringify({ 
         action: 'submit_click', 
         user_id: user?.id || null,
         timestamp: Date.now() 
-      }));
+      });
+
+      // ۲. نمایش پیغام تایید به کاربر و سپس بستن مینی‌اپ
+      tg.showAlert('اطلاعات با موفقیت تایید شد!', () => {
+        try {
+          tg.sendData(payload);
+        } catch (e) {
+          console.log('Opened via Menu Button, sendData skipped.');
+        }
+        tg.close();
+      });
     });
   }
 });
