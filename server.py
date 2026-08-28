@@ -299,7 +299,7 @@ async def health():
     return {
         "ok": True,
         "service": "AsoLand Mini App",
-        "version": "5.5-auth-weather",
+        "version": "5.6-weather-fallback",
         "telegram": {
             "bot_token_configured": bool(os.getenv("BOT_TOKEN", "").strip()),
             "mini_app_url_configured": bool(os.getenv("MINI_APP_URL", "").strip()),

@@ -25,3 +25,17 @@ Set these Render environment variables at minimum:
 - `MINI_APP_URL`
 
 Keep `MINI_APP_URL` pointed to the deployed HTTPS URL of this Mini App. The bot menu will be synchronized automatically at application startup.
+
+## v5.6 — Weather fallback
+- Added a browser-side Open-Meteo fallback for the weather panel.
+- The Mini App now retries server weather first, then resolves the city and forecast directly from Open-Meteo when the server-side provider is unavailable.
+- Added common Persian/Kurdish city aliases to the browser fallback.
+- Weather button is disabled while a request is active to prevent duplicate calls.
+- Empty city input is handled before any network request.
+- Cache-busting query updated from app.js?v=47 to app.js?v=48.
+- Server health version updated to 5.6-weather-fallback.
+
+Validation performed:
+- Python syntax: server.py, asoland_bot.py, set_menu_button.py
+- JavaScript syntax: app.js
+- Server-side direct DNS/network access to external weather providers is unavailable in this build environment, so external live requests could not be integration-tested here.
